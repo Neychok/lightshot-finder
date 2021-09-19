@@ -82,8 +82,8 @@ blacklist = [
 while(True):
 
 	# Increment Page number
-	slug_letters = ''.join(choice(ascii_lowercase) for i in range(3))
-	slug_numbers = ''.join(choice(digits) for i in range(3))
+	slug_letters = ''.join(choice(ascii_lowercase) for i in range(2))
+	slug_numbers = ''.join(choice(digits) for i in range(4))
 
 	# Prnt.sc URL
 	page = f'https://prnt.sc/{slug_letters}{slug_numbers}'
